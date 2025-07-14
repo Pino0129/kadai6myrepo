@@ -2,6 +2,7 @@ import pandas as pd
 from scipy.stats import linregress
 import matplotlib.pyplot as plt
 import numpy as np
+import os
 
 def fit_trendline(year_timestamps, data):
     """Fits a trendline to the given data using linear regression.
@@ -13,6 +14,8 @@ def fit_trendline(year_timestamps, data):
     Returns:
         tuple: A tuple containing the slope and R-squared value of the trendline.
     """
+    if len(year_timestamps) != len(data):
+        raise ValueError("タイムスタンプとデータの長さが一致していません。")
     result = linregress(year_timestamps, data)
     slope = round(result.slope, 3)
     r_squared = round(result.rvalue**2, 3)
@@ -30,11 +33,24 @@ def process_sdg_data(input_excel_file, columns_to_drop):
     Returns:
         pandas DataFrame: The processed DataFrame with dropped columns and transposed index.
     """
+
+    if not os.path.exists(input_excel_file):
+        raise FileNotFoundError(f"ファイルが見つかりません: {input_excel_file}")
+
     df = pd.read_excel(input_excel_file)
     df = df.drop(columns_to_drop, axis=1)
     df = df.set_index("GeoAreaName").transpose()
     return df
 
+def extract_country_data(df, country_name):
+    if country_name not in df.columns:
+        raise KeyError(f"指定された国名 '{country_name}' はデータに存在しません。")
+    if df[country_name].isnull().all():
+        raise ValueError(f"{country_name} のデータがすべて欠損しています。")
+    
+    timestamps = [int(i) for i in df.index.tolist()]
+    country_data = df[country_name].tolist()
+    return timestamps, country_data
 
 def country_trendline(country_name):
     """Calculate the slope and R-squared value of the trendline for a given country.
@@ -59,8 +75,8 @@ def country_trendline(country_name):
             "Units",
         ],
     )
-    timestamps = [int(i) for i in df.index.tolist()]
-    country_data = df[country_name].tolist()
+    
+    timestamps, country_data = extract_country_data(df, country_name)
     slope, r_squared, intercept  = fit_trendline(timestamps, country_data)
     return slope, r_squared, intercept
 
@@ -85,15 +101,14 @@ def generate_image(country_name):
     plt.clf()
 
     ## First Graph
-    timestamps = [int(i) for i in df.index.tolist()]
-    country_data = df[country_name].tolist()
+    timestamps, country_data = extract_country_data(df, country_name)
     plt.plot(timestamps, country_data, color='blue', label='Data')  
 
     ## Second Graph
-    a,b,c  = fit_trendline(timestamps, country_data)
+    slope, r_squared, intercept  = fit_trendline(timestamps, country_data)
     x = np.linspace(timestamps[0], timestamps[-1], 100) 
-    y = a * x + c
-    plt.plot(x, y, label=f'y = {a}x + {c}', color='red')  
+    y = slope * x + intercept
+    plt.plot(x, y, label=f'y = {slope}x + {intercept}', color='red')  
 
     plt.xlabel('year')
     plt.ylabel('percent')
